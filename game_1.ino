@@ -38,12 +38,16 @@ uint8_t back_buffer[COLS][ROWS] = {0};
 
 #define PALLET_WIDTH 7
 #define PALLET_ROW 13
-int8_t pallet_pos = (COLS - PALLET_WIDTH) / 2;
+int8_t pallet_pos = 0;
 
 #define BULLET_TRAIL 5
 int8_t bullet_x[BULLET_TRAIL] = {0};
 int8_t bullet_y[BULLET_TRAIL] = {0};
 
+#define BLOCKS_BORDER 3
+#define BLOCKS_WIDTH (COLS - 2*BLOCKS_BORDER)
+#define BLOCKS_HEIGHT 8
+bool blocks[BLOCKS_WIDTH][BLOCKS_HEIGHT] = {0};
 
 void setup() {
   GLCD.Init();
@@ -55,19 +59,36 @@ void setup() {
   digitalWrite(SNES_LATCH, LOW);
   digitalWrite(SNES_CLK, LOW);
   
-  GLCD.ClearScreen();
-    // render frame 2pixel thick
-  GLCD.DrawRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
-  GLCD.DrawRect(1, 1, SCREEN_WIDTH-2, SCREEN_HEIGHT-2);
+  init_game();
 
   Serial.begin(115200);
   Serial.println("initialization completed");
 }
 
+void init_game_screen() {
+  clear_buffer();
+  clear_back_buffer();
+
+  GLCD.ClearScreen();
+    // render frame 2pixel thick
+  GLCD.DrawRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+  GLCD.DrawRect(1, 1, SCREEN_WIDTH-2, SCREEN_HEIGHT-2);
+  
+}
+
 void init_game() {
+  init_game_screen();
+  pallet_pos = (COLS - PALLET_WIDTH) / 2;
+  
   for (int i = 0; i < BULLET_TRAIL; i++) {
     bullet_x[i] = pallet_pos + PALLET_WIDTH/2;
     bullet_y[i] = PALLET_ROW-1;
+  }
+
+  for (int i = 0; i < BLOCKS_WIDTH; i++) {
+    for (int j = 0; j < BLOCKS_HEIGHT; j++) {
+      blocks[i][j] = true;
+    }
   }
 }
 
@@ -117,6 +138,15 @@ void clear_buffer() {
   for (uint8_t c = 0; c < COLS; c++) {
     for (uint8_t r = 0; r < ROWS; r++) {
       front_buffer[c][r] = EMPTY;
+    }
+  }
+}
+
+void clear_back_buffer() {
+  // TODO: Extract common function
+  for (uint8_t c = 0; c < COLS; c++) {
+    for (uint8_t r = 0; r < ROWS; r++) {
+      back_buffer[c][r] = EMPTY;
     }
   }
 }
@@ -214,9 +244,9 @@ int8_t bullet_y_delta = -1;
 int8_t update_bullet = 0;
 
 #define GS_PLAYING 0
-#define GS_GAMEOVER 1
-#define GS_WON 2
-int8_t game_state = GS_WON;
+#define GS_ENDSCREEN 1
+#define GS_PAUSE 2
+int8_t gamestate = GS_PLAYING;
 
 void shift_bullet_trail() {
   for (int c = BULLET_TRAIL - 1; c > 0; c--) {
@@ -245,41 +275,83 @@ void render_you_won() {
   render_end_text("YOU", "WON");
 }
 
-void loop() {
-  if (game_state == GS_GAMEOVER) {
-    render_game_over();
-    game_state = GS_WON;
-    
-  }
-  else if (game_state == GS_WON) {
-    render_you_won();
-    game_state = GS_GAMEOVER;
+bool bullet_on_pallet() {
+  return (bullet_y[0] == PALLET_ROW) && (bullet_x[0] >= pallet_pos && bullet_x[0] < pallet_pos + PALLET_WIDTH);
+}
+
+bool detect_collision() {
+  // collision with pallete
+  if (bullet_on_pallet()) {
+    return true;
   }
 
-  delay(5000);
-  return;
-  
+  // collision with stone
+
+  return false;
+}
+
+void loop() {
   uint16_t keys = read_snes();
+
+  if (gamestate == GS_ENDSCREEN) {
+    if (keys & SNES_START) {
+      gamestate = GS_PLAYING;
+      init_game();
+    }
+    return;
+  }
+
+  if (gamestate == GS_PAUSE) {
+    if (keys & SNES_START) {
+      gamestate = GS_PLAYING;
+      init_game_screen();
+    }
+    return;
+  }
+  
+  int8_t pallet_boost = 0;
   if (keys & SNES_A) {
     pallet_pos = min(pallet_pos+2, COLS-PALLET_WIDTH);
+    pallet_boost = 3;
   }
   else if (keys & SNES_Y) {
     pallet_pos = max(pallet_pos-2, 0);
+    pallet_boost = -3;
   }
-
+  else if (keys & SNES_SELECT) {
+    gamestate = GS_PAUSE;
+    render_end_text("PAUSE", "...");
+    return;
+  }
 
   shift_bullet_trail();
   bullet_x[0] += bullet_x_delta;
   bullet_y[0] += bullet_y_delta;
-  
-  if (bullet_x[0] < 0 || bullet_x[0] >= COLS) {
-    bullet_x_delta = -bullet_x_delta;
-    bullet_x[0] += bullet_x_delta;
+
+  if (bullet_y[0] == ROWS) {
+    render_game_over();
+    gamestate = GS_ENDSCREEN;
+    return;
   }
 
-  if (bullet_y[0] < 0 || bullet_y[0] >= ROWS) {
+  if (bullet_on_pallet()) {
+    bullet_x[0] += pallet_boost;
+  }
+  else {
+    pallet_boost = 0;
+  }
+
+  bool coll = detect_collision();
+
+  if (bullet_y[0] < 0 || bullet_y[0] >= ROWS || coll) {
     bullet_y_delta = -bullet_y_delta;
     bullet_y[0] += bullet_y_delta;
+  }
+
+  coll = detect_collision();
+  if (bullet_x[0] < 0 || bullet_x[0] >= COLS || coll) {
+    bullet_x_delta = -bullet_x_delta;
+    bullet_x[0] += bullet_x_delta - pallet_boost;
   }
 
   
