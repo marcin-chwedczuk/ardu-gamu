@@ -12,3 +12,11 @@ Parts:
 In `docs` folder you will find:
 * LCD Datasheet, LCD Controller Datasheet
 * SNES Controller interface description (thanks to Propeller/Hydra project)
+
+To compile you need:
+* `openGLCD` library - https://bitbucket.org/bperrybap/openglcd/wiki/Home
+
+To install `openGLCD` [download](https://bitbucket.org/bperrybap/openglcd/downloads/) `.zip` file with the most recent release.
+In Arduino Studio choose Sketch -> Include Library -> Add ZIP Library... 
+and restart Arduino Studio. The library comes with great documentation that can be found in Arduino Projects Directory / libraries / openGLCD / docs
+(open HTML file using your browser).
