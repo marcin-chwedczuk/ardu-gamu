@@ -213,6 +213,11 @@ int8_t bullet_x_delta = 1;
 int8_t bullet_y_delta = -1;
 int8_t update_bullet = 0;
 
+#define GS_PLAYING 0
+#define GS_GAMEOVER 1
+#define GS_WON 2
+int8_t game_state = GS_WON;
+
 void shift_bullet_trail() {
   for (int c = BULLET_TRAIL - 1; c > 0; c--) {
     bullet_x[c] = bullet_x[c-1];
@@ -220,7 +225,40 @@ void shift_bullet_trail() {
   }
 }
 
+void render_end_text(String text1, String text2) {
+    GLCD.ClearScreen();
+    GLCD.DrawRoundRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, 5);
+    //GLCD.DrawRoundRect(2, 2, SCREEN_WIDTH-4, SCREEN_HEIGHT-4, 5);
+    GLCD.SelectFont(Roosewood26); 
+    GLCD.DrawString(text1.c_str(), gTextfmt_center, 1);  
+    GLCD.DrawString(text2.c_str(), gTextfmt_center, 23);  
+
+    GLCD.SelectFont(Iain5x7);
+    GLCD.DrawString("Press START to try again...", 8, 52);
+}
+
+void render_game_over() {
+  render_end_text("GAME", "OVER");
+}
+
+void render_you_won() {
+  render_end_text("YOU", "WON");
+}
+
 void loop() {
+  if (game_state == GS_GAMEOVER) {
+    render_game_over();
+    game_state = GS_WON;
+    
+  }
+  else if (game_state == GS_WON) {
+    render_you_won();
+    game_state = GS_GAMEOVER;
+  }
+
+  delay(5000);
+  return;
+  
   uint16_t keys = read_snes();
   if (keys & SNES_A) {
     pallet_pos = min(pallet_pos+2, COLS-PALLET_WIDTH);
@@ -229,7 +267,7 @@ void loop() {
     pallet_pos = max(pallet_pos-2, 0);
   }
 
-  if (++update_bullet > 0) { update_bullet = 0;
+
   shift_bullet_trail();
   bullet_x[0] += bullet_x_delta;
   bullet_y[0] += bullet_y_delta;
@@ -242,7 +280,6 @@ void loop() {
   if (bullet_y[0] < 0 || bullet_y[0] >= ROWS) {
     bullet_y_delta = -bullet_y_delta;
     bullet_y[0] += bullet_y_delta;
-  }
   }
 
   
