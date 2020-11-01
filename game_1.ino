@@ -1,7 +1,9 @@
+#include <openGLCD.h>
 
-#define SNES_CLK 4
-#define SNES_LATCH 2
-#define SNES_DATA 3
+
+#define SNES_CLK A5
+#define SNES_LATCH 12
+#define SNES_DATA 13
 
 #define SNES_B        0b0000000000000001u
 #define SNES_Y        0b0000000000000010u
@@ -20,7 +22,7 @@
 #define SNES_ERROR    0b1111111111111111u
 
 void setup() {
-  // put your setup code here, to run once:
+  GLCD.Init();
 
   pinMode(SNES_CLK, OUTPUT);
   pinMode(SNES_LATCH, OUTPUT);
@@ -28,9 +30,20 @@ void setup() {
 
   digitalWrite(SNES_LATCH, LOW);
   digitalWrite(SNES_CLK, LOW);
+  
+  intro_screen();
 
   Serial.begin(115200);
   Serial.println("initialization completed");
+}
+
+void intro_screen()
+{
+  GLCD.ClearScreen();
+  GLCD.SelectFont(fixednums7x15);
+  GLCD.DrawString("OK", gTextfmt_center, 3);
+  GLCD.DrawString("INIT", gTextfmt_center, GLCD.CharHeight(0) + 2);
+  GLCD.DrawRoundRect(0+10,0, GLCD.Right-20, GLCD.CharHeight(0) *2 + 1, 5);  // rounded rectangle around text area   
 }
 
 uint16_t read_snes() {
@@ -113,7 +126,11 @@ void loop() {
     if (prev != new_state) {
       prev = new_state;
       //String bits = to_bin16(new_state);
-      Serial.print("RECV: "); Serial.println(nes_state(new_state));
+      GLCD.ClearScreen();
+      GLCD.SelectFont(Arial14);
+      String tmp = nes_state(new_state);
+      GLCD.DrawString(tmp.c_str(), gTextfmt_center, gTextfmt_center);
+      //Serial.print("RECV: "); Serial.println(nes_state(new_state));
     }
 
     //delay(100);
