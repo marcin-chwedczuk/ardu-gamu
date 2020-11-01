@@ -68,11 +68,16 @@ uint16_t read_snes() {
 
 String nes_state(uint16_t value) {
   static uint16_t bits[] = {
-    SNES_B, SNES_Y
+    SNES_B, SNES_Y, SNES_START, SNES_SELECT,
+    SNES_UP, SNES_DOWN, SNES_LEFT, SNES_RIGHT,
+    SNES_A, SNES_X, SNES_L, SNES_R
+    
   };
 
   static String descriptions[] = {
-    "B", "Y"
+    "B", "Y", "START", "SELECT",
+    "UP", "DOWN", "LEFT", "RIGHT",
+    "A", "X", "L", "R"
   };
 
   String state_str = "";
