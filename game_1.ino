@@ -35,6 +35,7 @@ uint8_t back_buffer[COLS][ROWS] = {0};
 #define EMPTY WHITE
 #define FILLED BLACK
 #define BORDER 2
+#define DOTTED 3
 
 #define PALLET_WIDTH 7
 #define PALLET_ROW 13
@@ -45,6 +46,7 @@ int8_t bullet_x[BULLET_TRAIL] = {0};
 int8_t bullet_y[BULLET_TRAIL] = {0};
 
 #define BLOCKS_BORDER 3
+#define BLOCKS_H_BORDER 1
 #define BLOCKS_WIDTH (COLS - 2*BLOCKS_BORDER)
 #define BLOCKS_HEIGHT 8
 bool blocks[BLOCKS_WIDTH][BLOCKS_HEIGHT] = {0};
@@ -93,21 +95,19 @@ void init_game() {
 }
 
 void render_buffer() {
-
-
   for (uint8_t c = 0; c < COLS; c++) {
     for (uint8_t r = 0; r < ROWS; r++) {
       uint8_t f = front_buffer[c][r];
       
       if (back_buffer[c][r] != f) {
-        if (f != BORDER) {
+        if (f != BORDER && f != DOTTED) {
           GLCD.FillRect(
             BORDER_SIZE + BLOCK_SIZE*c,
             BORDER_SIZE + BLOCK_SIZE*r,
             BLOCK_SIZE, BLOCK_SIZE,
             f);
         }
-        else {
+        else if (f == BORDER) {
           GLCD.FillRect(
             BORDER_SIZE + BLOCK_SIZE*c,
             BORDER_SIZE + BLOCK_SIZE*r,
@@ -127,9 +127,30 @@ void render_buffer() {
             BLOCK_SIZE, BLACK);
             
         }
+        else {
+          GLCD.FillRect(
+            BORDER_SIZE + BLOCK_SIZE*c,
+            BORDER_SIZE + BLOCK_SIZE*r,
+            BLOCK_SIZE, BLOCK_SIZE,
+            BLACK);
+
+          GLCD.FillRect(
+            BORDER_SIZE + BLOCK_SIZE*c + BLOCK_SIZE/4,
+            BORDER_SIZE + BLOCK_SIZE*r + BLOCK_SIZE/4,
+            BLOCK_SIZE/2, BLOCK_SIZE/2,
+            WHITE);
+        }
         
         back_buffer[c][r] = f;
       }
+    }
+  }
+}
+
+void render_blocks() {
+  for (int i = 0; i < BLOCKS_WIDTH; i++) {
+    for (int j = 0; j < BLOCKS_HEIGHT; j++) {
+       front_buffer[i+BLOCKS_BORDER][j+BLOCKS_H_BORDER] = blocks[i][j] ? DOTTED : EMPTY;
     }
   }
 }
@@ -355,7 +376,7 @@ void loop() {
   }
 
   
-
+  render_blocks();
   render_pallete();
   render_bullet();
   swap_buffer();
