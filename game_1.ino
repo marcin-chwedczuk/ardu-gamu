@@ -37,7 +37,7 @@ uint8_t back_buffer[COLS][ROWS] = {0};
 #define BORDER 2
 #define DOTTED 3
 
-#define PALLET_WIDTH 7
+#define PALLET_WIDTH 11
 #define PALLET_ROW 13
 int8_t pallet_pos = 0;
 
@@ -45,11 +45,14 @@ int8_t pallet_pos = 0;
 int8_t bullet_x[BULLET_TRAIL] = {0};
 int8_t bullet_y[BULLET_TRAIL] = {0};
 
-#define BLOCKS_BORDER 3
+#define BLOCKS_BORDER 5
 #define BLOCKS_H_BORDER 1
 #define BLOCKS_WIDTH (COLS - 2*BLOCKS_BORDER)
-#define BLOCKS_HEIGHT 8
+#define BLOCKS_HEIGHT 4
 bool blocks[BLOCKS_WIDTH][BLOCKS_HEIGHT] = {0};
+
+int8_t bullet_x_delta = 1;
+int8_t bullet_y_delta = -1;
 
 void setup() {
   GLCD.Init();
@@ -92,6 +95,9 @@ void init_game() {
       blocks[i][j] = true;
     }
   }
+
+  bullet_x_delta = 1;
+  bullet_y_delta = -1;
 }
 
 void render_buffer() {
@@ -260,8 +266,7 @@ String to_bin16(uint16_t value) {
   return s;
 }
 
-int8_t bullet_x_delta = 1;
-int8_t bullet_y_delta = -1;
+
 int8_t update_bullet = 0;
 
 #define GS_PLAYING 0
@@ -297,7 +302,23 @@ void render_you_won() {
 }
 
 bool bullet_on_pallet() {
-  return (bullet_y[0] == PALLET_ROW) && (bullet_x[0] >= pallet_pos && bullet_x[0] < pallet_pos + PALLET_WIDTH);
+  if (bullet_y[0] != PALLET_ROW) return false;
+
+  // on the pallet
+  if (bullet_x[0] >= pallet_pos && bullet_x[0] < pallet_pos + PALLET_WIDTH) {
+    return true;
+  }
+
+  // collision logic pushed ball onto the wall
+  if (pallet_pos == 0 && bullet_x[0] == -1) {
+    return true;
+  }
+
+  if (pallet_pos == ((COLS-1)-PALLET_WIDTH+1) && bullet_x[0] == COLS) {
+    return true;
+  }
+
+  return false;
 }
 
 bool detect_collision() {
@@ -306,12 +327,36 @@ bool detect_collision() {
     return true;
   }
 
-  // collision with stone
+  // collision with blocks
+  int8_t x = bullet_x[0];
+  int8_t y = bullet_y[0];
+
+  // to block coords
+  x -= BLOCKS_BORDER;
+  y -= BLOCKS_H_BORDER;
+
+  if (x >= BLOCKS_WIDTH || y >= BLOCKS_HEIGHT) return false;
+
+  if (blocks[x][y]) {
+    blocks[x][y] = false;
+    return true;
+  }
 
   return false;
 }
 
+bool is_winner() {
+  for (int i = 0; i < BLOCKS_WIDTH; i++) {
+    for (int j = 0; j < BLOCKS_HEIGHT; j++) {
+      if (blocks[i][j]) return false;
+    }
+  }
+
+  return true;
+}
+
 void loop() {
+  delay(17);
   uint16_t keys = read_snes();
 
   if (gamestate == GS_ENDSCREEN) {
@@ -332,7 +377,7 @@ void loop() {
   
   int8_t pallet_boost = 0;
   if (keys & SNES_A) {
-    pallet_pos = min(pallet_pos+2, COLS-PALLET_WIDTH);
+    pallet_pos = min(pallet_pos+2, (COLS-1)-PALLET_WIDTH+1);
     pallet_boost = 3;
   }
   else if (keys & SNES_Y) {
@@ -346,6 +391,7 @@ void loop() {
   }
 
   shift_bullet_trail();
+  
   bullet_x[0] += bullet_x_delta;
   bullet_y[0] += bullet_y_delta;
 
@@ -363,7 +409,6 @@ void loop() {
   }
 
   bool coll = detect_collision();
-
   if (bullet_y[0] < 0 || bullet_y[0] >= ROWS || coll) {
     bullet_y_delta = -bullet_y_delta;
     bullet_y[0] += bullet_y_delta;
@@ -373,6 +418,12 @@ void loop() {
   if (bullet_x[0] < 0 || bullet_x[0] >= COLS || coll) {
     bullet_x_delta = -bullet_x_delta;
     bullet_x[0] += bullet_x_delta - pallet_boost;
+  }
+
+  if (is_winner()) {
+    gamestate = GS_ENDSCREEN;
+    render_you_won();
+    return;
   }
 
   
