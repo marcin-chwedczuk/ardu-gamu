@@ -21,6 +21,30 @@
 
 #define SNES_ERROR    0b1111111111111111u
 
+#define SCREEN_WIDTH 128
+#define SCREEN_HEIGHT 64
+
+// Game uses 4x4 pixel blocks and 2 pixel thick border
+#define COLS 31
+#define ROWS 15
+#define BLOCK_SIZE 4
+#define BORDER_SIZE 2
+uint8_t front_buffer[COLS][ROWS] = {0};
+uint8_t back_buffer[COLS][ROWS] = {0};
+
+#define EMPTY WHITE
+#define FILLED BLACK
+#define BORDER 2
+
+#define PALLET_WIDTH 7
+#define PALLET_ROW 13
+int8_t pallet_pos = (COLS - PALLET_WIDTH) / 2;
+
+#define BULLET_TRAIL 5
+int8_t bullet_x[BULLET_TRAIL] = {0};
+int8_t bullet_y[BULLET_TRAIL] = {0};
+
+
 void setup() {
   GLCD.Init();
 
@@ -31,19 +55,88 @@ void setup() {
   digitalWrite(SNES_LATCH, LOW);
   digitalWrite(SNES_CLK, LOW);
   
-  intro_screen();
+  GLCD.ClearScreen();
+    // render frame 2pixel thick
+  GLCD.DrawRect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+  GLCD.DrawRect(1, 1, SCREEN_WIDTH-2, SCREEN_HEIGHT-2);
 
   Serial.begin(115200);
   Serial.println("initialization completed");
 }
 
-void intro_screen()
-{
-  GLCD.ClearScreen();
-  GLCD.SelectFont(fixednums7x15);
-  GLCD.DrawString("OK", gTextfmt_center, 3);
-  GLCD.DrawString("INIT", gTextfmt_center, GLCD.CharHeight(0) + 2);
-  GLCD.DrawRoundRect(0+10,0, GLCD.Right-20, GLCD.CharHeight(0) *2 + 1, 5);  // rounded rectangle around text area   
+void init_game() {
+  for (int i = 0; i < BULLET_TRAIL; i++) {
+    bullet_x[i] = pallet_pos + PALLET_WIDTH/2;
+    bullet_y[i] = PALLET_ROW-1;
+  }
+}
+
+void render_buffer() {
+
+
+  for (uint8_t c = 0; c < COLS; c++) {
+    for (uint8_t r = 0; r < ROWS; r++) {
+      uint8_t f = front_buffer[c][r];
+      
+      if (back_buffer[c][r] != f) {
+        if (f != BORDER) {
+          GLCD.FillRect(
+            BORDER_SIZE + BLOCK_SIZE*c,
+            BORDER_SIZE + BLOCK_SIZE*r,
+            BLOCK_SIZE, BLOCK_SIZE,
+            f);
+        }
+        else {
+          GLCD.FillRect(
+            BORDER_SIZE + BLOCK_SIZE*c,
+            BORDER_SIZE + BLOCK_SIZE*r,
+            BLOCK_SIZE, BLOCK_SIZE,
+            WHITE);
+
+          // Top line
+          GLCD.DrawHLine(
+            BORDER_SIZE + BLOCK_SIZE*c,
+            BORDER_SIZE + BLOCK_SIZE*r,
+            BLOCK_SIZE, BLACK);
+
+          // Bottom line
+          GLCD.DrawHLine(
+            BORDER_SIZE + BLOCK_SIZE*c,
+            BORDER_SIZE + BLOCK_SIZE*r + BLOCK_SIZE-1,
+            BLOCK_SIZE, BLACK);
+            
+        }
+        
+        back_buffer[c][r] = f;
+      }
+    }
+  }
+}
+
+void clear_buffer() {
+  for (uint8_t c = 0; c < COLS; c++) {
+    for (uint8_t r = 0; r < ROWS; r++) {
+      front_buffer[c][r] = EMPTY;
+    }
+  }
+}
+
+void swap_buffer() {
+  render_buffer();
+  clear_buffer();
+}
+
+void render_pallete() {
+  for (uint8_t c = 0, pos = pallet_pos; c < PALLET_WIDTH; c++, pos++) {
+    if (pos >= COLS) break; // error - should not happen
+    front_buffer[pos][PALLET_ROW] = (c & 1) ? BORDER : FILLED;
+  }
+}
+
+void render_bullet() {
+  for (int8_t c = 0; c < BULLET_TRAIL; c++) {
+    front_buffer[bullet_x[c]][bullet_y[c]] = FILLED;
+  }
 }
 
 uint16_t read_snes() {
@@ -116,23 +209,45 @@ String to_bin16(uint16_t value) {
   return s;
 }
 
-void loop() {
+int8_t bullet_x_delta = 1;
+int8_t bullet_y_delta = -1;
+int8_t update_bullet = 0;
 
-  // put your main code here, to run repeatedly:
-  uint16_t prev = 0;
-
-  while (true) {
-    uint16_t new_state = read_snes();
-    if (prev != new_state) {
-      prev = new_state;
-      //String bits = to_bin16(new_state);
-      GLCD.ClearScreen();
-      GLCD.SelectFont(Arial14);
-      String tmp = nes_state(new_state);
-      GLCD.DrawString(tmp.c_str(), gTextfmt_center, gTextfmt_center);
-      //Serial.print("RECV: "); Serial.println(nes_state(new_state));
-    }
-
-    //delay(100);
+void shift_bullet_trail() {
+  for (int c = BULLET_TRAIL - 1; c > 0; c--) {
+    bullet_x[c] = bullet_x[c-1];
+    bullet_y[c] = bullet_y[c-1];
   }
+}
+
+void loop() {
+  uint16_t keys = read_snes();
+  if (keys & SNES_A) {
+    pallet_pos = min(pallet_pos+2, COLS-PALLET_WIDTH);
+  }
+  else if (keys & SNES_Y) {
+    pallet_pos = max(pallet_pos-2, 0);
+  }
+
+  if (++update_bullet > 0) { update_bullet = 0;
+  shift_bullet_trail();
+  bullet_x[0] += bullet_x_delta;
+  bullet_y[0] += bullet_y_delta;
+  
+  if (bullet_x[0] < 0 || bullet_x[0] >= COLS) {
+    bullet_x_delta = -bullet_x_delta;
+    bullet_x[0] += bullet_x_delta;
+  }
+
+  if (bullet_y[0] < 0 || bullet_y[0] >= ROWS) {
+    bullet_y_delta = -bullet_y_delta;
+    bullet_y[0] += bullet_y_delta;
+  }
+  }
+
+  
+
+  render_pallete();
+  render_bullet();
+  swap_buffer();
 }
